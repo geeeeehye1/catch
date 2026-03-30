@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>완전 랜덤 카드 제비뽑기</title>
+    <style>
+        :root {
+            --primary-color: #4A90E2;
+            --accent-color: #e74c3c;
+            --bg-color: #f0f2f5;
+            --card-front: #ffffff;
+            --card-back: #4A90E2;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            font-family: 'Pretendard', sans-serif;
+            background-color: var(--bg-color);
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #app { width: 100%; height: 100%; position: relative; }
+
+        /* 메인 화면 */
+        #main-page {
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; gap: 3vh; height: 100%; padding: 20px;
+        }
+
+        .team-btn {
+            width: 85%; max-width: 600px; padding: 4vh;
+            font-size: clamp(1.2rem, 5vw, 2.2rem); font-weight: bold;
+            border: none; border-radius: 20px; background: white;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1); cursor: pointer;
+            color: #000 !important;
+        }
+        .team-1 { border-left: 15px solid #e74c3c; }
+        .team-2 { border-left: 15px solid #2ecc71; }
+
+        /* 게임 화면 */
+        #game-page {
+            display: none; flex-direction: column; height: 100%;
+            padding: 2vh 20px; align-items: center;
+        }
+
+        #team-title { font-size: clamp(1.2rem, 4vw, 2rem); margin: 2vh 0; color: #444; font-weight: 800; text-align: center; }
+
+        /* 카드 배치 컨테이너 */
+        #card-container {
+            display: flex; flex-wrap: wrap; justify-content: center; align-content: center;
+            gap: 15px; width: 100%; max-width: 1000px; flex-grow: 1; margin: 0 auto;
+        }
+
+        .card {
+            width: clamp(75px, 18vw, 120px); 
+            height: clamp(105px, 25vw, 170px);
+            perspective: 1000px; cursor: pointer;
+        }
+        
+        .card-inner {
+            position: relative; width: 100%; height: 100%;
+            text-align: center; transition: transform 0.6s;
+            transform-style: preserve-3d;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 12px;
+        }
+
+        .card.flipped .card-inner { transform: rotateY(180deg); }
+
+        .card-front, .card-back {
+            position: absolute; width: 100%; height: 100%;
+            backface-visibility: hidden; display: flex;
+            align-items: center; justify-content: center;
+            border-radius: 12px; border: 2.5px solid #ddd;
+        }
+
+        .card-front { background-color: var(--card-front); font-size: clamp(1.5rem, 5vw, 2.5rem); font-weight: bold; color: #333; }
+        .card-back {
+            background-color: var(--card-back); color: white;
+            transform: rotateY(180deg); font-size: clamp(0.9rem, 3vw, 1.5rem); font-weight: bold;
+            padding: 10px; word-break: keep-all; line-height: 1.2;
+        }
+
+        /* 셔플 애니메이션 */
+        @keyframes flyIn {
+            from { transform: scale(0) rotate(180deg); opacity: 0; }
+            to { transform: scale(1) rotate(0); opacity: 1; }
+        }
+        .card-animate { animation: flyIn 0.5s ease-out; }
+
+        /* 결과 오버레이 */
+        #result-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; color: white;
+        }
+        #result-name { font-size: clamp(3.5rem, 15vw, 9rem); font-weight: 900; margin-bottom: 20px; color: #fff; text-shadow: 0 0 20px rgba(255,235,59,0.5); }
+        #status-info { margin-bottom: 30px; font-size: 1.2rem; color: #ddd; }
+
+        .controls { display: flex; gap: 15px; margin: 3vh 0; width: 100%; justify-content: center; z-index: 10; }
+        .control-btn {
+            padding: 15px 35px; font-size: clamp(1rem, 3vw, 1.3rem); font-weight: bold;
+            border: none; border-radius: 15px; cursor: pointer; color: white;
+        }
+        .shuffle-btn { background-color: var(--primary-color); }
+        .main-btn { background-color: #666; }
+        .close-btn { background-color: var(--accent-color); padding: 12px 60px; font-size: 1.5rem; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="main-page">
+        <h1 style="font-size: clamp(2.5rem, 8vw, 4rem); margin: 0; color: #333;">CATCH</h1>
+        <button class="team-btn team-1" onclick="initGame('team1')">공산당</button>
+        <button class="team-btn team-2" onclick="initGame('team2')">건들면 물어용<br>웃으면서 해용</button>
+    </div>
+
+    <div id="game-page">
+        <h2 id="team-title">팀 이름</h2>
+        <div id="card-container"></div>
+        <div class="controls">
+            <button class="control-btn shuffle-btn" onclick="resetFullGame()">전체 리셋</button>
+            <button class="control-btn main-btn" onclick="goMain()">메인</button>
+        </div>
+    </div>
+
+    <div id="result-overlay" onclick="closeResult()">
+        <div id="result-name">이름</div>
+        <div id="status-info">남은 인원: 0명</div>
+        <button class="control-btn close-btn">확인</button>
+    </div>
+</div>
+
+<script>
+    const teamData = {
+        team1: { name: "공산당", members: ["강대환", "강조훈", "곽철성", "김경태", "김동현", "박정민", "이상훈", "이선탁", "이지혜", "정상훈", "현보욱"] },
+        team2: { name: "건들면 물어용 웃으면서 해용", members: ["강창규", "김동한", "김선재", "김현수", "박성대", "성주원", "유덕휘", "박경훈", "최명수", "하준수", "황지운"] }
+    };
+
+    let originalMembers = [];
+    let remainingMembers = [];
+    let isDrawing = false;
+
+    function initGame(teamKey) {
+        const team = teamData[teamKey];
+        // 1. 상태 완전 초기화
+        isDrawing = false;
+        document.getElementById('team-title').innerText = team.name;
+        
+        // 2. 해당 팀의 데이터만 정확히 복사
+        originalMembers = [...team.members];
+        remainingMembers = [...originalMembers];
+        
+        // 3. 화면 전환
+        document.getElementById('main-page').style.display = 'none';
+        document.getElementById('game-page').style.display = 'flex';
+        
+        // 4. 카드 렌더링
+        shuffleAndRender();
+    }
+
+    function shuffleAndRender() {
+        const container = document.getElementById('card-container');
+        container.innerHTML = '';
+
+        if (remainingMembers.length === 0) {
+            alert("모든 인원을 뽑았습니다. 명단을 초기화합니다.");
+            remainingMembers = [...originalMembers];
+        }
+
+        // 현재 남아있는 명단만 섞기
+        let shuffledNames = [...remainingMembers];
+        for (let i = shuffledNames.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffledNames[i], shuffledNames[j]] = [shuffledNames[j], shuffledNames[i]];
+        }
+
+        // 번호 섞기
+        let numbers = Array.from({length: shuffledNames.length}, (_, i) => i + 1);
+        for (let i = numbers.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+        }
+
+        shuffledNames.forEach((name, index) => {
+            const card = document.createElement('div');
+            card.className = 'card card-animate';
+            card.innerHTML = `
+                <div class="card-inner" onclick="flipCard(this, '${name}')">
+                    <div class="card-front">${numbers[index]}</div>
+                    <div class="card-back">${name}</div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function flipCard(cardInner, name) {
+        if (isDrawing) return;
+        const card = cardInner.parentElement;
+        
+        if (!card.classList.contains('flipped')) {
+            isDrawing = true;
+            card.classList.add('flipped');
+            
+            // 명단에서 즉시 제외
+            remainingMembers = remainingMembers.filter(m => m !== name);
+
+            setTimeout(() => {
+                showResult(name);
+            }, 700);
+        }
+    }
+
+    function showResult(name) {
+        document.getElementById('result-name').innerText = name;
+        document.getElementById('status-info').innerText = `남은 인원: ${remainingMembers.length}명 / ${originalMembers.length}명`;
+        document.getElementById('result-overlay').style.display = 'flex';
+    }
+
+    function closeResult() {
+        document.getElementById('result-overlay').style.display = 'none';
+        isDrawing = false;
+        shuffleAndRender();
+    }
+
+    function resetFullGame() {
+        remainingMembers = [...originalMembers];
+        isDrawing = false;
+        shuffleAndRender();
+    }
+
+    function goMain() {
+        // 메인으로 갈 때 상태 초기화
+        originalMembers = [];
+        remainingMembers = [];
+        isDrawing = false;
+        document.getElementById('main-page').style.display = 'flex';
+        document.getElementById('game-page').style.display = 'none';
+    }
+</script>
+</body>
+</html>
